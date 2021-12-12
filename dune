@@ -1,5 +1,5 @@
 (executable
- (name music)
- (modules music)
+ (name modules)
+ (modules music utils modules)
  (libraries msynth))
 
