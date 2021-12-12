@@ -28,44 +28,42 @@ type polyphonic_phrase = ((note * position) list)
 let dur_to_float (duration : duration) : float = 
   match duration with
   | Fixed x -> 
-    match x with
-    | Whole  -> 4
-    | Half  -> 2
-    | Quarter  -> 1
-    | QuarterTrip  -> .66
-    | Eighth  -> .5
-    | EigthTrip  -> .33
-    | Sixteenth  -> .25
+    (match x with
+    | Whole  -> 4.
+    | Half  -> 2.
+    | Quarter  -> 1.
+    | QuarterTrip  -> 0.66
+    | Eighth  -> 0.5
+    | EigthTrip  -> 0.33
+    | Sixteenth  -> 0.25)
   | Free x -> x
 
 let mono_to_poly (mono : monophonic_phrase) : polyphonic_phrase = 
-  let rec helper result current_pos inp = 
+  let rec helper (result : polyphonic_phrase) (current_pos : float) (inp : monophonic_phrase) = 
   match inp with 
   | [] -> result
   | hd :: tl -> 
-      match hd with
-      | Note (nap, dur) -> helper (result @ (nap, current_pos)]) (current_pos +  (dur_to_float dur)) tl
-      | Rest dur -> helper result (current_pos +  (dur_to_float dur)) tl in 
-  helper [] 0 mono
+      (match hd with
+      | Note (_nap, dur) -> (helper (result @ [(hd, current_pos)]) (current_pos +.  (dur_to_float dur)) tl)
+      | Rest dur -> (helper result (current_pos +.  (dur_to_float dur)) tl) ) in 
+  helper [] 0. mono
 
 let note_is_diatonic n = 
   match n with
-  | Note (nap, dur) ->
+  | Note (nap, _dur) ->
     let n, _, _ = nap in 
-    match n with 
-    | Diatonic _ -> True 
-    | _ -> False
-  | _ -> True
+    (match n with 
+    | Diatonic _ -> true 
+    | _ -> false)
+  | Rest (_d) -> true
 
 let mono_phrase_is_diatonic (mono : monophonic_phrase) : bool = 
   List.for_all note_is_diatonic mono
 
 let poly_phrase_is_diatonic (poly : polyphonic_phrase) : bool = 
-  List.forall note_is_diatonic (List.map fst poly)
+  List.for_all note_is_diatonic (List.map fst poly)
 
-A, 4 = 69
-
-let absolute_to_offset_from_a (note_name, accidental) = 
+let absolute_to_offset_from_a note_name accidental = 
   let x = (match accidental with 
   | Flat -> -1 
   | Natural -> 0 
@@ -81,24 +79,59 @@ let absolute_to_offset_from_a (note_name, accidental) =
   | G -> 10 in 
   res + x
 
-let diatonic_to_offset_from_a note_name, accidental, key = 
-  
+(* let diatonic_to_key_of_c (d : diatonic_degree) : absolute_degree = 
+  match d with 
+  | Root -> C
+  | Second -> D 
+  | Third  -> E 
+  | Fourth -> F 
+  | Fifth  -> G
+  | Sixth  -> A 
+  | Seventh -> B *)
 
-let nap_to_height ((note_name, accidental, octave) : note_absolute_position) (k : key) : int = 
+(* 
+
+let semitone_to_nap (s : int) : note_absolute_position = 
+  let s = s mod 12 in 
+  match s with 
+  | 0 -> (Absolute C, Natural, 0)
+  | 1 -> (Absolute  C, Sharp, 0) 
+  | 2 -> (Absolute  D, Natural, 0)
+  | 3 -> (Absolute  D, Sharp, 0)
+  | 4 -> (Absolute  E, Natural, 0)
+  | 5 -> (Absolute  F, Natural, 0)
+  | 6 -> (Absolute  F, Sharp, 0)
+  | 7 -> (Absolute  G, Natural, 0)
+  | 8 -> (Absolute  G, Sharp, 0)
+  | 9 -> (Absolute  A, Natural, 0)
+  | 10 -> (Absolute  A, Sharp, 0)
+  | 11 -> (Absolute  B, Natural, 0)
+
+let transpose_
+
+let diatonic_to_offset_from_a _note_name _accidental _key = 0
+
+   *)
+
+exception NotImplemented of string
+
+let nap_to_height ((note_name, accidental, octave) : note_absolute_position) (_k : key) : int = 
   match note_name with 
-  | Diatonic d 
-  | Absolute a -> 21 + (octave * 12) + absolute_to_offset_from_a note_name, accidental
+   | Diatonic _d ->  raise (NotImplemented "NotImplemented") (*21 + (octave * 12) + diatonic_to_offset_from_a d accidental k *)
+  | Absolute a -> 21 + (octave * 12) + absolute_to_offset_from_a a accidental
 
 
-let poly_to_msynth_repr (poly : polyphonic_phrase) = 
+let poly_to_msynth_repr (k : key) (poly : polyphonic_phrase)  = 
   let note_to_note ((nt, pos) : note * position) = 
     match nt with 
-    | Note nap, dur ->  pos. , (dur_to_float dur), `Note (71, 1.);
-    | Rest dur -> (8. , 0. , `Nop)
+    | Note (nap, dur) ->  pos , (dur_to_float dur), `Note ((nap_to_height nap k), 1.);
+    | Rest _dur -> (pos , 0. , `Nop) in
+  List.map note_to_note poly
 
-let mono_to_msynth_repr mono = 
-  mono |> mono_to_poly |> poly_to_msynth_repr
-(* 
+let mono_to_msynth_repr mono k = 
+  (mono |> mono_to_poly) |> poly_to_msynth_repr k
+
+
 let tempo = 130.
 
 let s =
@@ -113,15 +146,17 @@ let s =
       let s = B.mul env s in
       B.cmul vol s
   in
-  let vm = 1. in
-  let melody =
+  (* let vm = 1. in *)
+  let mo = [Note ((Absolute C, Natural, 4), Fixed Quarter); Note ((Absolute E, Natural, 4), Fixed Quarter)] in 
+  let melody = mono_to_msynth_repr mo Chromatic in 
+  (* let melody =
     [
       0.,0.75,`Note (77,vm);
       1.,0.5,`Note (76,vm);
       1.5,1.,`Note (72,vm);
       0.,4.,`Nop;
     ]
-  in
+  in *)
   let melody = Pattern.repeat 3 melody in
   let melody = Pattern.append melody [0.,4.,`Nop] in
   let melody = Instrument.play (note ~detune:false ~r:0.3 saw) (Pattern.stream ~loop:true tempo melody) in
@@ -160,4 +195,4 @@ let s =
   s
 
 let () =
-  Output.play s *)
+  Output.play s
